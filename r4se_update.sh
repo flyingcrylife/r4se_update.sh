@@ -2,12 +2,14 @@
 #Build by lone_wind
 #清理文件
 clean_up () {
-    rm -rf openwrt*.img* ${img_path}/openwrt*.img* sha256sums* *update.sh*
+    rm -rf *.img* ${img_path}/*.img* *sha256sums* *update*.sh*
 }
 #容器检查
 docker_check () {
     if opkg list | grep -q "docker"; then
-        /etc/init.d/dockerd stop
+        if /etc/init.d/dockerd status | grep -q "running"; then
+            /etc/init.d/dockerd stop
+        fi
     fi
 }
 #硬盘检查
@@ -20,66 +22,113 @@ hd_check () {
         fi
     fi
 }
+#设备选择
+machine_choose () {
+    echo -e '\e[92m输入对应数字选择设备或退出\e[0m'
+    echo -e '0 --- 退出\n1 --- R4S\n2 --- DN2\n3 --- X86'
+    read -p "请输入数字[0-3],回车确认 " machine_num
+    case $machine_num in
+        0)
+            echo -e '\e[91m退出脚本，升级结束\e[0m' && exit;
+            ;;
+        1)
+            echo -e '\e[92m已选择R4S\e[0m'
+            machine_id=1 && repo_id='NanoPi-R4S-R4SE'
+            ;;
+        2)
+            echo -e '\e[92m已选择DN2\e[0m'
+            machine_id=1 && repo_id='DoorNet2'
+            ;;
+        3)
+            echo -e '\e[92m已选择X86\e[0m'
+            machine_id=3 && repo_id='OpenWRT_x86_x64'
+            ;;
+        *)
+            echo -e '\e[91m非法输入,请输入数字[0-3]\e[0m' && machine_choose
+            ;;
+    esac
+}
 #版本选择
 version_choose () {
     echo -e '\e[92m根据数字选择固件版本或退出\e[0m'
-    echo -e '0 --- Exit退出\n1 --- Docker_容器版\n2 --- Stable_稳定版\n3 --- Formal_正式版'
-    read -p "请输入数字[0-3],回车确认 " version_num
+    echo -e '0 --- Exit退出\n1 --- Docker_容器版\n2 --- Formal_正式版\n3 --- Stable_稳定版\n4 --- Lite_乞丐版'
+    read -p "请输入数字[0-4],回车确认 " version_num
     case $version_num in
         0)
             echo -e '\e[91m退出脚本，升级结束\e[0m' && exit;
             ;;
         1)
-            echo -e '\e[92m已选择Docker_容器版\e[0m'
+            echo -e '\e[92m已选择Docker_容器版\e[0m' && version_num=docker
             ;;
         2)
-            echo -e '\e[92m已选择Stable_稳定版\e[0m'
+            echo -e '\e[92m已选择Formal_正式版\e[0m' && version_num=full
             ;;
         3)
-            echo -e '\e[92m已选择Formal_正式版\e[0m'
+            echo -e '\e[92m已选择Stable_稳定版\e[0m' && version_num=slim
+            ;;
+        4)
+            echo -e '\e[92m已选择Lite_乞丐版\e[0m' && version_num=beggar
             ;;
         *)
-            echo -e '\e[91m非法输入,请输入数字[0-3]\e[0m' && version_choose
+            echo -e '\e[91m非法输入,请输入数字[0-4]\e[0m' && version_choose
             ;;
     esac
 }
 #格式选择
 format_choose () {
-    echo -e '\e[92m根据数字选择固件格式或退出\e[0m'
-    echo -e '0 --- 退出\n1 --- Ext4\n2 --- Squashfs'
-    read -p "请输入数字[0-2],回车确认 " format_num
-    case $format_num in
-        0)
-            echo -e '\e[91m退出脚本，升级结束\e[0m' && exit;
-            ;;
-        1)
-            echo -e '\e[92m已选择EXT4格式\e[0m' && format=ext4
-            ;;
-        2)
-            echo -e '\e[92m已选择Squashfs格式\e[0m' && format=squashfs
-            ;;
-        *)
-            echo -e '\e[91m非法输入,请输入数字[0-2]\e[0m' && format_choose
-            ;;
-    esac
+        echo -e '\e[92m根据数字选择固件格式或退出\e[0m'
+        echo -e '0 --- 退出\n1 --- Ext4\n2 --- Squashfs'
+    if [ $machine_num == 3 ];then
+        echo -e '\e[91mX86固定使用Squashfs格式\e[0m'
+        break
+    else
+        #echo -e '\e[92m根据数字选择固件格式或退出\e[0m'
+        #echo -e '0 --- 退出\n1 --- Ext4\n2 --- Squashfs'
+        read -p "请输入数字[0-2],回车确认 " format_num
+        case $format_num in
+            0)
+                echo -e '\e[91m退出脚本，升级结束\e[0m' && exit;
+                ;;
+            1)
+                echo -e '\e[92m已选择EXT4格式\e[0m' && format=ext4
+                ;;
+            2)
+                echo -e '\e[92m已选择Squashfs格式\e[0m' && format=squashfs
+                ;;
+            *)
+                echo -e '\e[91m非法输入,请输入数字[0-2]\e[0m' && format_choose
+                ;;
+        esac
+    fi
 }
 #仓库选择
 repo_set () {
+    case $machine_num in
+        1)
+            firmware_id="friendlyarm_nanopi-r4se-${format}-sysupgrade.img"
+            ;;
+        2)
+            firmware_id="embedfire_doornet2-${format}-sysupgrade.img"
+            ;;
+        3)
+            firmware_id="x86-64-squashfs-efi.img"
+            ;;
+    esac
     proxy_url=https://ghproxy.com
-    repo_url=https://github.com/DHDAXCW/NanoPi-R4S-R4SE/releases
-    firmware_id=openwrt-rockchip-armv8-friendlyarm_nanopi-r4se-${format}-sysupgrade.img
+    repo_url=https://github.com/DHDAXCW/${repo_id}/releases
+    firmware_url=${version_num}-${firmware_id}
 }
 #寻找固件
 search_file () {
     cd ${work_path} && clean_up && days=$(($days+1))
     #echo `(date -d "@$(($(busybox date +%s) - 86400*($days-1)))" +%Y.%m.%d)`
-    wget -q ${proxy_url}/${repo_url}/download/$(date -d "@$(($(busybox date +%s) - 86400*($days-1)))" +%Y.%m.%d)-Lean${version_num}/sha256sums
+    wget -q ${proxy_url}/${repo_url}/download/$(date -d "@$(($(busybox date +%s) - 86400*($days-1)))" +%Y.%m.%d)-Lean${machine_id}/${version_num}-sha256sums
     exist_judge
 }
 #存在判断
 exist_judge () {
-    if [ -f sha256sums ]; then
-        echo -e '\e[92m已找到当前日期的固件\e[0m' && echo `(date -d "@$(($(busybox date +%s) - 86400*($days-1)))" +%Y.%m.%d)`-Lean$version_num
+    if [ -f ${version_num}-sha256sums ]; then
+        echo -e '\e[92m已找到当前日期的固件\e[0m' && echo `(date -d "@$(($(busybox date +%s) - 86400*($days-1)))" +%Y.%m.%d)`
         firmware_confirm
     elif [ $days == 21 ]; then
         echo -e '\e[91m未找到合适固件，脚本退出\e[0m' && exit;
@@ -94,7 +143,7 @@ firmware_confirm () {
     case $skip in
         [yY][eE][sS]|[yY])
             echo -e '\e[92m已确认，开始下载固件\e[0m'
-            wget ${proxy_url}/${repo_url}/download/$(date -d "@$(($(busybox date +%s) - 86400*($days-1)))" +%Y.%m.%d)-Lean${version_num}/${firmware_id}.gz
+            wget ${proxy_url}/${repo_url}/download/$(date -d "@$(($(busybox date +%s) - 86400*($days-1)))" +%Y.%m.%d)-Lean${machine_id}/${firmware_url}.gz
             ;;
         [nN][oO]|[nN])
             echo -e '\e[91m寻找前一天的固件\e[0m' && search_file
@@ -109,11 +158,18 @@ firmware_confirm () {
 }
 #固件验证
 firmware_check () {
-    if [ -f ${img_path}/${firmware_id}  ]; then
-        echo -e '\e[92m检查升级文件大小\e[0m' && du -sh ${img_path}/${firmware_id}
-    elif [ -f ${firmware_id}.gz ]; then
-        echo -e '\e[92m计算固件的sha256sum值\e[0m' && sha256sum ${firmware_id}.gz
-        echo -e '\e[92m对比下列sha256sum值，检查固件是否完整\e[0m' && grep -i ${firmware_id}.gz sha256sums
+    if [ -f ${img_path}/${firmware_url}  ]; then
+        echo -e '\e[92m检查升级文件大小\e[0m' && du -sh ${img_path}/${firmware_url}
+    elif [ -f ${firmware_url}.gz ]; then
+        echo -e '\e[91m开始检查固件完整性\e[0m'
+        sha256sum ${firmware_url}.gz | awk '{print $1}' > sha256sums_real
+        grep -i ${firmware_url}.gz ${version_num}-sha256sums | awk '{print $1}' > sha256sums_true
+        #if diff sha256sums_real sha256sums_true; then
+        if cmp -s sha256sums_real sha256sums_true; then
+            echo -e '\e[92msha256sum校验通过\e[0m'
+        else
+            echo -e '\e[91msha256sum校验失败\e[0m' && exit;
+        fi
     else
         echo -e '\e[91m没有相关升级文件，请检查网络\e[0m' && exit;
     fi
@@ -136,8 +192,8 @@ version_confirm () {
 }
 #解压固件
 unzip_fireware () {
-    echo -e '\e[92m开始解压固件\e[0m' && gzip -cd ${firmware_id}.gz > ${img_path}/${firmware_id}
-    if [ -f ${img_path}/${firmware_id} ]; then
+    echo -e '\e[92m开始解压固件\e[0m' && gzip -cd ${firmware_url}.gz > ${img_path}/${firmware_url}
+    if [ -f ${img_path}/${firmware_url} ]; then
         echo -e '\e[92m已解压出升级文件\e[0m' && firmware_check
     else
         echo -e '\e[91m解压固件失败\e[0m' && clean_up && exit;
@@ -149,10 +205,10 @@ update_system () {
     read -r -p "是否保存配置? [Y/N]确认 [E]退出 " skip
     case $skip in
         [yY][eE][sS]|[yY])
-            echo -e '\e[92m已选择保存配置\e[0m' && sysupgrade -F ${firmware_id}
+            echo -e '\e[92m已选择保存配置\e[0m' && sysupgrade -F ${firmware_url}
             ;;
         [nN][oO]|[nN])
-            echo -e '\e[91m已选择不保存配置\e[0m' && sysupgrade -F -n ${firmware_id}
+            echo -e '\e[91m已选择不保存配置\e[0m' && sysupgrade -F -n ${firmware_url}
             ;;
         [eE][xX][iI][tT]|[eE])
             echo -e '\e[91m取消升级\e[0m' && clean_up && exit;
@@ -165,23 +221,30 @@ update_system () {
 #刷写系统
 dd_system () {
     echo -e '\e[92m开始升级系统\e[0m'
-    dd if=${img_path}/${firmware_id} of=/dev/${hd_id}
+    dd if=${img_path}/${firmware_url} of=/dev/${hd_id}
     echo -e '\e[92m刷写系统完毕，请手动断电再上电\e[0m'
 }
 #系统更新
 update_firmware () {
+    echo -e '\e[92mFusionWrt固件升级脚本\e[0m'
+    echo -e '\e[91m---------------------\e[0m'
     img_path=/tmp && clean_up && docker_check && hd_check
+    machine_choose && version_choose && format_choose && repo_set
     mount -t tmpfs -o remount,size=100% tmpfs /tmp
     real_mem=$(cat /proc/meminfo | grep MemTotal | awk '{print $2}') && mini_mem=1572864
     if [ $real_mem -ge $mini_mem ]; then 
-        work_path=/tmp && version_choose
-        format_choose && repo_set && search_file && firmware_check && unzip_fireware
-        update_system
+        work_path=/tmp
+        search_file && firmware_check && unzip_fireware && update_system
     else
         echo -e '\e[91m您的内存小于2G，升级将不保留配置\e[0m'
-        work_path=/root && version_num=2
-        format_choose && repo_set && search_file && firmware_check && unzip_fireware
-        dd_system
+        work_path=/root
+        if [ ${version_num} == begger ]; then
+            echo -e '\e[92m固件版本为Lite_乞丐版\e[0m'
+        else
+            echo -e '\e[91m内存小，固件版本强制为Stable_稳定版\e[0m'
+            version_num=slim
+        fi
+        search_file && firmware_check && unzip_fireware && dd_system
     fi
 }
 
