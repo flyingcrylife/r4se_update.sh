@@ -32,7 +32,7 @@ machine_choose () {
             echo -e '\e[91m退出脚本，升级结束\e[0m' && exit;
             ;;
         1)
-            echo -e '\e[92m已选择R4S\e[0m'
+            echo -e '\e[92m已选择R4SE\e[0m'
             machine_id=1 && repo_id='NanoPi-R4S-R4SE'
             ;;
         2)
